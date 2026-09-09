@@ -29,7 +29,7 @@ public class SpeechRecognitionResponse {
     private RecognitionResult result = new RecognitionResult();
 
     /** Package-private factory for the session-start callback response. */
-    static SpeechRecognitionResponse sessionStart(String voiceId) {
+    public static SpeechRecognitionResponse sessionStart(String voiceId) {
         SpeechRecognitionResponse resp = new SpeechRecognitionResponse();
         resp.code = 0;
         resp.message = "success";
