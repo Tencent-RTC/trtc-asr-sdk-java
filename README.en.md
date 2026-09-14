@@ -63,7 +63,7 @@ Within **3 seconds** of the WebSocket handshake, send one start frame:
 {
   "type": "start",
   "auth": {"sdkappid": "1400000001", "usersig": "eJw..."},
-  "params": {"engine_model_type": "16k_zh_en", "voice_format": 1, "needvad": 1}
+  "params": {"engine_model_type": "bigmodel", "language": "zh", "voice_format": 1, "needvad": 1}
 }
 ```
 
@@ -129,7 +129,7 @@ sequenceDiagram
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `voice_id` | string | from URL | Stream ID (<=128 chars); same as the URL or omitted |
-| `engine_model_type` | string | `16k_zh_en` | Engine model |
+| `engine_model_type` | string | **required** | Engine model; no default, must be provided. The examples pass `bigmodel` (recommended, with `language`) |
 | `language` | string | empty | Language hint (`zh`, `en`, `ja`, …); empty = auto detect |
 | `voice_format` | int | `1` | Audio format: `1`pcm/`4`speex/`6`silk/`8`mp3/`10`opus/`11`ogg/`12`wav/`14`m4a/`16`aac |
 | `input_sample_rate` | int | — | Only `8000`: declare 8k PCM input for a 16k engine |
@@ -182,7 +182,7 @@ With diarization on, speaker attribution comes through `result.speaker_segments[
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `engine_model_type` | string | yes | Engine model |
+| `engine_model_type` | string | yes | Engine model, required; the examples pass `bigmodel` (recommended, with `language`) |
 | `source_type` | int | yes | `0` URL / `1` local data (base64) |
 | `voice_format` | string | yes | `wav`, `pcm`, `ogg-opus`, `mp3`, `m4a` |
 | `url` | string | conditional | Audio URL (required when `source_type=0`) |
@@ -278,7 +278,8 @@ SpeechRecognitionListener listener = new SpeechRecognitionListener() {
 Credential credential = Wire.newCredential(1400000000, "your-sdk-secret-key");
 // credential.setSite(Credential.SITE_INTL);  // international site
 
-SpeechRecognizer recognizer = new SpeechRecognizer(credential, "16k_zh_en", listener);
+SpeechRecognizer recognizer = new SpeechRecognizer(credential, "bigmodel", listener);
+recognizer.setLanguage("zh"); // bigmodel works best with an explicit language
 
 // start() waits synchronously for the server ack; auth/param errors throw here.
 recognizer.start();
@@ -294,7 +295,11 @@ Credential credential = Wire.newCredential(1400000000, "your-sdk-secret-key");
 SentenceRecognizer recognizer = new SentenceRecognizer(credential);
 
 byte[] data = Files.readAllBytes(Path.of("audio.pcm"));
-TranscribeResponse resp = recognizer.recognizeData(data, "pcm", "16k_zh_en");
+TranscribeRequest req = new TranscribeRequest();
+req.engineModelType = "bigmodel";
+req.voiceFormat = "pcm";
+req.language = "zh";
+TranscribeResponse resp = recognizer.recognizeDataWithOptions(data, req);
 System.out.println(resp.result + " (" + resp.audioDuration + " ms)");
 ```
 
@@ -304,7 +309,12 @@ System.out.println(resp.result + " (" + resp.audioDuration + " ms)");
 Credential credential = Wire.newCredential(1400000000, "your-sdk-secret-key");
 FileRecognizer recognizer = new FileRecognizer(credential);
 
-String taskId = recognizer.createTaskFromURL("https://example.com/audio.wav", "16k_zh_en");
+CreateTranscriptionRequest req = new CreateTranscriptionRequest();
+req.engineModelType = "bigmodel";
+req.language = "zh";
+req.sourceType = Wire.SOURCE_TYPE_URL;
+req.url = "https://example.com/audio.wav";
+String taskId = recognizer.createTask(req);
 TranscriptionStatus status = recognizer.waitForResult(taskId);
 System.out.println(status.result + " (" + status.audioDuration + " s)");
 ```
@@ -349,10 +359,12 @@ Realtime recognition (`v3.SpeechRecognizer`); setters mirror the v2 client:
 
 | Value | Description |
 |-------|-------------|
+| `bigmodel` | Large model engine, recommended; pair it with `language` (e.g. `zh`) |
 | `8k_zh` | Chinese, telephony |
-| `16k_zh` | Chinese, general (recommended) |
+| `16k_zh` | Chinese, general |
 | `16k_zh_en` | Chinese + English |
-| `bigmodel` | Large model engine (multi-language) |
+
+> For `bigmodel`, `language` is not just a hint: the server picks the backend model from it (`zh` routes to the self-developed large model, empty routes to the generic pipeline). The examples default to `bigmodel` + `zh`.
 
 ## Examples
 
@@ -366,7 +378,7 @@ Realtime recognition (`v3.SpeechRecognizer`); setters mirror the v2 client:
 ```bash
 mvn compile exec:java \
   -Dexec.mainClass="com.tencent.trtcasr.examples.V3RealtimeAsrExample" \
-  -Dexec.args="audio.pcm"
+  -Dexec.args="audio.pcm bigmodel"
 ```
 
 ## Project layout

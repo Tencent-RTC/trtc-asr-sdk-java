@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.tencent.trtcasr.common.Credential;
+import com.tencent.trtcasr.v3.CreateTranscriptionRequest;
 import com.tencent.trtcasr.v3.FileRecognizer;
 import com.tencent.trtcasr.v3.TranscriptionStatus;
 import com.tencent.trtcasr.v3.Wire;
@@ -31,22 +32,42 @@ public class V3FileAsrExample {
             System.exit(1);
         }
         if (args.length < 1) {
-            System.err.println("Usage: V3FileAsrExample <local.wav> | V3FileAsrExample -u <url> [engine]");
+            System.err.println("Usage: V3FileAsrExample <local.wav> <engine> | V3FileAsrExample -u <url> <engine>");
             System.exit(1);
         }
-        String engine = args.length > 1 && !args[0].equals("-u") ? args[1]
-                : args.length > 2 ? args[2] : "16k_zh_en";
+        final boolean urlMode = args[0].equals("-u");
+        // engine/lang default to the recommended bigmodel + zh pairing; an
+        // empty lang falls back to server-side language detection.
+        final int engineIdx = urlMode ? 2 : 1;
+        if (args.length <= engineIdx) {
+            System.err.println("error: engine is required (engine model type, e.g. bigmodel)");
+            System.exit(2);
+        }
+        String engine = args[engineIdx];
+        String lang = args.length > (urlMode ? 3 : 2) ? args[urlMode ? 3 : 2] : "";
+        // The bigmodel engine is best used with an explicit language; every
+        // other engine falls back to server-side detection unless lang is given.
+        if (lang.isEmpty() && "bigmodel".equals(engine)) {
+            lang = "zh";
+        }
 
         // v3 credentials need only SDKAppID + SecretKey (no Tencent Cloud APPID).
         Credential credential = Wire.newCredential(sdkAppId, secretKey);
         FileRecognizer recognizer = new FileRecognizer(credential);
 
+        CreateTranscriptionRequest req = new CreateTranscriptionRequest();
+        req.engineModelType = engine;
+        if (!lang.isEmpty()) {
+            req.language = lang;
+        }
         String taskId;
-        if (args[0].equals("-u")) {
-            taskId = recognizer.createTaskFromURL(args[1], engine);
+        if (urlMode) {
+            req.sourceType = Wire.SOURCE_TYPE_URL;
+            req.url = args[1];
+            taskId = recognizer.createTask(req);
         } else {
             byte[] data = Files.readAllBytes(Path.of(args[0]));
-            taskId = recognizer.createTaskFromData(data, engine);
+            taskId = recognizer.createTaskFromDataWithOptions(data, req);
         }
         System.out.println("Task created: " + taskId);
 

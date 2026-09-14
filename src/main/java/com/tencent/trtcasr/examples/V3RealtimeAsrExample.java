@@ -61,11 +61,25 @@ public class V3RealtimeAsrExample {
             System.exit(1);
         }
         String path = args.length > 0 ? args[0] : "examples/test.pcm";
-        String engine = args.length > 1 ? args[1] : "16k_zh_en";
+        if (args.length <= 1) {
+            System.err.println("error: engine is required (engine model type, e.g. bigmodel)");
+            System.exit(2);
+        }
+        String engine = args[1];
+        // Empty lang falls back to server-side language detection.
+        String lang = args.length > 2 ? args[2] : "";
+        // The bigmodel engine is best used with an explicit language; every
+        // other engine falls back to server-side detection unless lang is given.
+        if (lang.isEmpty() && "bigmodel".equals(engine)) {
+            lang = "zh";
+        }
 
         // v3 credentials need only SDKAppID + SecretKey (no Tencent Cloud APPID).
         Credential credential = Wire.newCredential(sdkAppId, secretKey);
         SpeechRecognizer recognizer = new SpeechRecognizer(credential, engine, LISTENER);
+        if (!lang.isEmpty()) {
+            recognizer.setLanguage(lang); // bigmodel 建议显式指定语种
+        }
         recognizer.setWriteTimeout(Duration.ofSeconds(5));
         recognizer.setStopTimeout(Duration.ofSeconds(10));
 

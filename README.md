@@ -62,7 +62,7 @@ WebSocket 建连后 **3 秒内**发送首帧 JSON：
 {
   "type": "start",
   "auth": {"sdkappid": "1400000001", "usersig": "eJw..."},
-  "params": {"engine_model_type": "16k_zh_en", "voice_format": 1, "needvad": 1}
+  "params": {"engine_model_type": "bigmodel", "language": "zh", "voice_format": 1, "needvad": 1}
 }
 ```
 
@@ -128,7 +128,7 @@ sequenceDiagram
 | 参数 | 类型 | 默认 | 说明 |
 |------|------|------|------|
 | `voice_id` | string | 取 URL | 流唯一标识（≤128 字符），与 URL 一致或省略 |
-| `engine_model_type` | string | `16k_zh_en` | 引擎模型 |
+| `engine_model_type` | string | **必填** | 引擎模型，无默认值，必填；示例取 `bigmodel`（推荐，配 `language`） |
 | `language` | string | 空 | 识别语言（`zh`/`en`/`ja`…），空=自动检测 |
 | `voice_format` | int | `1` | 音频格式：`1`pcm/`4`speex/`6`silk/`8`mp3/`10`opus/`11`ogg/`12`wav/`14`m4a/`16`aac |
 | `input_sample_rate` | int | 不传 | 仅 `8000`：声明 8k PCM 输入，配 16k 引擎升采样 |
@@ -181,7 +181,7 @@ sequenceDiagram
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `engine_model_type` | string | 是 | 引擎模型 |
+| `engine_model_type` | string | 是 | 引擎模型，必填；示例取 `bigmodel`（推荐，配 `language`） |
 | `source_type` | int | 是 | `0` URL 上传 / `1` 本地数据（base64） |
 | `voice_format` | string | 是 | 音频格式：`wav`、`pcm`、`ogg-opus`、`mp3`、`m4a` |
 | `url` | string | 条件 | 音频 URL（`source_type=0` 必填） |
@@ -277,7 +277,8 @@ SpeechRecognitionListener listener = new SpeechRecognitionListener() {
 Credential credential = Wire.newCredential(1400000000, "your-sdk-secret-key");
 // credential.setSite(Credential.SITE_INTL); // 国际站；不调用则走国内站
 
-SpeechRecognizer recognizer = new SpeechRecognizer(credential, "16k_zh_en", listener);
+SpeechRecognizer recognizer = new SpeechRecognizer(credential, "bigmodel", listener);
+recognizer.setLanguage("zh"); // bigmodel 建议显式指定语种
 
 // start() 同步等待服务端 ack；鉴权/参数错误在这里抛出。
 recognizer.start();
@@ -291,6 +292,7 @@ recognizer.stop(); // 发送 {"type":"end"} 并等待 final
 ```java
 import com.tencent.trtcasr.common.Credential;
 import com.tencent.trtcasr.v3.SentenceRecognizer;
+import com.tencent.trtcasr.v3.TranscribeRequest;
 import com.tencent.trtcasr.v3.TranscribeResponse;
 import com.tencent.trtcasr.v3.Wire;
 
@@ -298,7 +300,11 @@ Credential credential = Wire.newCredential(1400000000, "your-sdk-secret-key");
 SentenceRecognizer recognizer = new SentenceRecognizer(credential);
 
 byte[] data = java.nio.file.Files.readAllBytes(java.nio.file.Path.of("audio.pcm"));
-TranscribeResponse resp = recognizer.recognizeData(data, "pcm", "16k_zh_en");
+TranscribeRequest req = new TranscribeRequest();
+req.engineModelType = "bigmodel";
+req.voiceFormat = "pcm";
+req.language = "zh";
+TranscribeResponse resp = recognizer.recognizeDataWithOptions(data, req);
 System.out.println(resp.result + " (" + resp.audioDuration + " ms)");
 ```
 
@@ -306,6 +312,7 @@ System.out.println(resp.result + " (" + resp.audioDuration + " ms)");
 
 ```java
 import com.tencent.trtcasr.common.Credential;
+import com.tencent.trtcasr.v3.CreateTranscriptionRequest;
 import com.tencent.trtcasr.v3.FileRecognizer;
 import com.tencent.trtcasr.v3.TranscriptionStatus;
 import com.tencent.trtcasr.v3.Wire;
@@ -313,7 +320,12 @@ import com.tencent.trtcasr.v3.Wire;
 Credential credential = Wire.newCredential(1400000000, "your-sdk-secret-key");
 FileRecognizer recognizer = new FileRecognizer(credential);
 
-String taskId = recognizer.createTaskFromURL("https://example.com/audio.wav", "16k_zh_en");
+CreateTranscriptionRequest req = new CreateTranscriptionRequest();
+req.engineModelType = "bigmodel";
+req.language = "zh";
+req.sourceType = Wire.SOURCE_TYPE_URL;
+req.url = "https://example.com/audio.wav";
+String taskId = recognizer.createTask(req);
 TranscriptionStatus status = recognizer.waitForResult(taskId); // 轮询直至完成
 System.out.println(status.result + " (" + status.audioDuration + " s)");
 ```
@@ -363,9 +375,12 @@ System.out.println(status.result + " (" + status.audioDuration + " s)");
 
 | 类型 | 说明 |
 |------|------|
+| `bigmodel` | 大模型引擎，推荐；配合 `language` 指定语种（如 `zh`） |
 | `8k_zh` | 中文通用，常用于电话场景 |
-| `16k_zh` | 中文通用（推荐） |
+| `16k_zh` | 中文通用 |
 | `16k_zh_en` | 中英文通用 |
+
+> `bigmodel` 的 `language` 不只是提示：服务端按它选择后端模型（`zh` 走自研大模型，留空走通用链路）。示例默认 `bigmodel` + `zh`。
 
 ## 示例
 
@@ -380,7 +395,7 @@ System.out.println(status.result + " (" + status.audioDuration + " s)");
 
 ```bash
 mvn compile exec:java -Dexec.mainClass="com.tencent.trtcasr.examples.V3RealtimeAsrExample" \
-  -Dexec.args="audio.pcm"
+  -Dexec.args="audio.pcm bigmodel"
 ```
 
 ## 项目结构

@@ -66,11 +66,22 @@ public class RealtimeAsrExample {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("usage: RealtimeAsrExample <audio.pcm> [engine_model_type]");
+            System.err.println("usage: RealtimeAsrExample <audio.pcm> <engine> [lang]");
             System.exit(1);
         }
         String path = args[0];
-        String engine = args.length > 1 ? args[1] : "16k_zh_en";
+        if (args.length <= 1) {
+            System.err.println("error: engine is required (engine model type, e.g. bigmodel)");
+            System.exit(2);
+        }
+        String engine = args[1];
+        // Empty lang falls back to server-side language detection.
+        String lang = args.length > 2 ? args[2] : "";
+        // The bigmodel engine is best used with an explicit language; every
+        // other engine falls back to server-side detection unless lang is given.
+        if (lang.isEmpty() && "bigmodel".equals(engine)) {
+            lang = "zh";
+        }
 
         Credential credential = new Credential(
                 Long.parseLong(env("TRTC_ASR_APP_ID")),
@@ -78,6 +89,9 @@ public class RealtimeAsrExample {
                 env("TRTC_ASR_SECRET_KEY"));
 
         SpeechRecognizer recognizer = new SpeechRecognizer(credential, engine, new Printer());
+        if (!lang.isEmpty()) {
+            recognizer.setLanguage(lang); // bigmodel 建议显式指定语种
+        }
         // recognizer.setSpeakerDiarization(SignatureParams.SPEAKER_DIARIZATION_CLUSTER);
         // recognizer.setWordInfo(1);
         recognizer.start();

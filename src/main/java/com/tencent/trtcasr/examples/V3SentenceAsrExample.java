@@ -5,6 +5,7 @@ import java.nio.file.Path;
 
 import com.tencent.trtcasr.common.Credential;
 import com.tencent.trtcasr.v3.SentenceRecognizer;
+import com.tencent.trtcasr.v3.TranscribeRequest;
 import com.tencent.trtcasr.v3.TranscribeResponse;
 import com.tencent.trtcasr.v3.Wire;
 
@@ -32,14 +33,31 @@ public class V3SentenceAsrExample {
             System.exit(1);
         }
         String path = args.length > 0 ? args[0] : "audio.pcm";
-        String engine = args.length > 1 ? args[1] : "16k_zh_en";
+        if (args.length <= 1) {
+            System.err.println("error: engine is required (engine model type, e.g. bigmodel)");
+            System.exit(2);
+        }
+        String engine = args[1];
+        // Empty lang falls back to server-side language detection.
+        String lang = args.length > 2 ? args[2] : "";
+        // The bigmodel engine is best used with an explicit language; every
+        // other engine falls back to server-side detection unless lang is given.
+        if (lang.isEmpty() && "bigmodel".equals(engine)) {
+            lang = "zh";
+        }
 
         // v3 credentials need only SDKAppID + SecretKey (no Tencent Cloud APPID).
         Credential credential = Wire.newCredential(sdkAppId, secretKey);
         SentenceRecognizer recognizer = new SentenceRecognizer(credential);
 
         byte[] data = Files.readAllBytes(Path.of(path));
-        TranscribeResponse resp = recognizer.recognizeData(data, "pcm", engine);
+        TranscribeRequest req = new TranscribeRequest();
+        req.engineModelType = engine;
+        req.voiceFormat = "pcm";
+        if (!lang.isEmpty()) {
+            req.language = lang;
+        }
+        TranscribeResponse resp = recognizer.recognizeDataWithOptions(data, req);
 
         System.out.println("Result: " + resp.result);
         System.out.println("Duration: " + resp.audioDuration + " ms  RequestId: " + resp.requestId);

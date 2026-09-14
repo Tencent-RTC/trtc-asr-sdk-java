@@ -14,17 +14,29 @@ import com.tencent.trtcasr.common.Credential;
  * TRTC_ASR_SDK_APP_ID, TRTC_ASR_SECRET_KEY.
  *
  * <p>Usage: SentenceAsrExample &lt;audio.pcm&gt; [format=pcm]
- * [engine=16k_zh_en]
+ * [engine=bigmodel] [lang=zh]
  */
 public class SentenceAsrExample {
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("usage: SentenceAsrExample <audio-file> [format=pcm] [engine=16k_zh_en]");
+            System.err.println("usage: SentenceAsrExample <audio-file> [format=pcm]"
+                    + " <engine> [lang]");
             System.exit(1);
         }
         String path = args[0];
         String format = args.length > 1 ? args[1] : "pcm";
-        String engine = args.length > 2 ? args[2] : "16k_zh_en";
+        if (args.length <= 2) {
+            System.err.println("error: engine is required (engine model type, e.g. bigmodel)");
+            System.exit(2);
+        }
+        String engine = args[2];
+        // Empty lang falls back to server-side language detection.
+        String lang = args.length > 3 ? args[3] : "";
+        // The bigmodel engine is best used with an explicit language; every
+        // other engine falls back to server-side detection unless lang is given.
+        if (lang.isEmpty() && "bigmodel".equals(engine)) {
+            lang = "zh";
+        }
 
         Credential credential = new Credential(
                 Long.parseLong(env("TRTC_ASR_APP_ID")),
@@ -34,7 +46,14 @@ public class SentenceAsrExample {
         byte[] data = Files.readAllBytes(Path.of(path));
         SentenceRecognizer recognizer = new SentenceRecognizer(credential);
         try {
-            var result = recognizer.recognizeData(data, format, engine);
+            SentenceRecognizer.SentenceRecognitionRequest req =
+                    new SentenceRecognizer.SentenceRecognitionRequest();
+            req.setEngServiceType(engine);
+            req.setVoiceFormat(format);
+            if (!lang.isEmpty()) {
+                req.setLanguage(lang);
+            }
+            var result = recognizer.recognizeDataWithOptions(data, req);
             System.out.println("识别结果: " + result.getResult());
             System.out.println("音频时长: " + result.getAudioDuration() + " ms");
         } catch (ASRException e) {
