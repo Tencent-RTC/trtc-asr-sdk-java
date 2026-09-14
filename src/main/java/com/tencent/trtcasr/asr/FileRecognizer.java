@@ -11,6 +11,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -790,16 +791,23 @@ public class FileRecognizer {
         }
     }
 
-    /** Word-level timing within a sentence. */
+    /**
+     * Word-level timing within a sentence. Offsets are milliseconds relative
+     * to the start of the audio; the server spells them StartTime / EndTime,
+     * while the older OffsetStartMs / OffsetEndMs spelling is accepted as a
+     * fallback.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SentenceWords {
         @JsonProperty("Word")
         private String word = "";
 
-        @JsonProperty("OffsetStartMs")
+        @JsonProperty("StartTime")
+        @JsonAlias("OffsetStartMs")
         private long offsetStartMs;
 
-        @JsonProperty("OffsetEndMs")
+        @JsonProperty("EndTime")
+        @JsonAlias("OffsetEndMs")
         private long offsetEndMs;
 
         public String getWord() {

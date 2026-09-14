@@ -289,7 +289,7 @@ class FileRecognizerTest {
                             + "\"FinalSentence\":\"今天天气不错。\",\"SliceSentence\":\"今天 天气 不错\","
                             + "\"StartMs\":200,\"EndMs\":1380,\"WordsNum\":1,\"SpeechSpeed\":2.0,"
                             + "\"SpeakerId\":1,\"SpeakerRoleName\":\"teacher\",\"ChannelId\":0,\"Language\":\"zh\","
-                            + "\"Words\":[{\"Word\":\"今天\",\"OffsetStartMs\":200,\"OffsetEndMs\":500}]}]"
+                            + "\"Words\":[{\"Word\":\"今天\",\"StartTime\":200,\"EndTime\":500}]}]"
                             + "},\"RequestId\":\"req-123\"}}");
         })) {
             FileRecognizer r = new FileRecognizer(testCredential());
@@ -305,6 +305,25 @@ class FileRecognizerTest {
             assertEquals("teacher", status.getResultDetail().get(0).getSpeakerRoleName());
             assertEquals("zh", status.getResultDetail().get(0).getLanguage());
             assertEquals("今天", status.getResultDetail().get(0).getWords().get(0).getWord());
+            assertEquals(200, status.getResultDetail().get(0).getWords().get(0).getOffsetStartMs());
+            assertEquals(500, status.getResultDetail().get(0).getWords().get(0).getOffsetEndMs());
+        }
+    }
+
+    @Test
+    void describeTaskStatusAcceptsOffsetSpelling() throws Exception {
+        try (MockHttpServer server = new MockHttpServer(req -> MockHttpServer.MockResponse.json(
+                "{\"Response\":{\"Data\":{\"RecTaskId\":\"task-2\",\"Status\":2,\"StatusStr\":\"success\","
+                        + "\"ResultDetail\":[{\"FinalSentence\":\"你好\","
+                        + "\"Words\":[{\"Word\":\"你\",\"OffsetStartMs\":120,\"OffsetEndMs\":640}]}]},"
+                        + "\"RequestId\":\"req-2\"}}"))) {
+            FileRecognizer r = new FileRecognizer(testCredential());
+            r.setEndpoint(server.url());
+
+            TaskStatus status = r.describeTaskStatus("task-2");
+            assertEquals(1, status.getResultDetail().size());
+            assertEquals(120, status.getResultDetail().get(0).getWords().get(0).getOffsetStartMs());
+            assertEquals(640, status.getResultDetail().get(0).getWords().get(0).getOffsetEndMs());
         }
     }
 
