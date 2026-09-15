@@ -5,11 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import javax.xml.parsers.DocumentBuilderFactory;
+
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
 
 import com.tencent.trtcasr.asr.FileRecognizer;
 import com.tencent.trtcasr.asr.FileRecognizer.TaskStatus;
@@ -74,6 +80,33 @@ class SdkInfoTest {
         // which makes captured URLs comparable in server-side logs.
         assertEquals("platform=" + SignatureParams.queryEscape(SdkInfo.platform())
                 + "&sdk_lang=java&sdk_type=server&version=" + SdkInfo.SDK_VERSION, SdkInfo.reportQuery());
+    }
+
+    @Test
+    void versionMatchesThePomManifest() throws Exception {
+        // The version is written down twice: SdkInfo.SDK_VERSION and pom.xml. A
+        // release that bumps only one ships a jar whose reported version disagrees
+        // with its own metadata, which is exactly what happened to the Node.js
+        // SDK's 1.2.3. Read the manifest instead of hard-coding the value, so the
+        // assertion keeps holding for every future release.
+        Path pom = Path.of("pom.xml");
+        assertTrue(Files.exists(pom), "pom.xml must be readable from the test working directory");
+
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        // A manifest is data, not code: refuse DTDs and external entities.
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        Document doc = factory.newDocumentBuilder().parse(pom.toFile());
+
+        String manifestVersion = null;
+        for (Node n = doc.getDocumentElement().getFirstChild(); n != null; n = n.getNextSibling()) {
+            // Only the project's own <version>; dependency versions are nested deeper.
+            if (n.getNodeType() == Node.ELEMENT_NODE && "version".equals(n.getNodeName())) {
+                manifestVersion = n.getTextContent().trim();
+                break;
+            }
+        }
+        assertNotNull(manifestVersion, "pom.xml has no project <version>");
+        assertEquals(SdkInfo.SDK_VERSION, manifestVersion);
     }
 
     @Test
