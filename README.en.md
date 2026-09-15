@@ -12,7 +12,7 @@ This SDK targets the **v3 protocol**: only `SdkAppID` + `SecretKey` are required
 
 ## Prerequisites
 
-Two credentials are needed: `SdkAppID` and `SecretKey`. The domestic and international sites use different account systems — follow the official quick start for your site to register, create an application and activate the service:
+Two credentials are needed: `SdkAppID` and `SecretKey` (on v3 `SdkAppID` is the only customer dimension — the Tencent Cloud `AppID` is **no longer needed**). The domestic and international sites use different account systems — follow the official quick start for your site to register, create an application and activate the service:
 
 - **China site**: [Quick Start](https://xai.cloud-rtc.com/#gettingStarted) — register a Tencent Cloud account and complete real-name verification → create an application in the [TRTC console](https://console.cloud.tencent.com/trtc/app) → activate "AI Speech Recognition" (free trial available)
 - **International site**: [Quick Start](https://xai-intl.cloud-rtc.com/#gettingStarted) — register at [trtc.io](https://www.trtc.io) (a Tencentcloud account is created automatically, no real-name verification) → create an application at [console.trtc.io](https://console.trtc.io) → activate "AI Speech Recognition" (RTC Engine Lite or above only; Free Trial is not supported)
@@ -114,6 +114,7 @@ sequenceDiagram
     S-->>C: result.slice_type=0 (sentence begin)
     S-->>C: result.slice_type=1 (interim result) xN
     S-->>C: result.slice_type=2 (final sentence)
+    Note right of S: with several sentences, index increments and 0→1→2 repeats
 
     C->>S: {"type":"end"}
     S-->>C: {"final":1} (stream finished)
@@ -130,7 +131,7 @@ sequenceDiagram
 |-------|------|---------|-------------|
 | `voice_id` | string | from URL | Stream ID (<=128 chars); same as the URL or omitted |
 | `engine_model_type` | string | **required** | Engine model; no default, must be provided. The examples pass `bigmodel` (recommended, with `language`) |
-| `language` | string | empty | Language hint (`zh`, `en`, `ja`, …); empty = auto detect |
+| `language` | string | empty | Language hint (`zh`, `en`, `ja`, …); empty = auto detect. `bigmodel` is best used with an explicit value (e.g. `zh`) |
 | `voice_format` | int | `1` | Audio format: `1`pcm/`4`speex/`6`silk/`8`mp3/`10`opus/`11`ogg/`12`wav/`14`m4a/`16`aac |
 | `input_sample_rate` | int | — | Only `8000`: declare 8k PCM input for a 16k engine |
 | `needvad` | int | engine default | `0` off / `1` on |
@@ -411,7 +412,7 @@ Both are tri-state: **only an explicit setter call is sent on the wire**, so an 
 <dependency>
   <groupId>com.tencent</groupId>
   <artifactId>trtc-asr-sdk</artifactId>
-  <version>1.0.0</version>
+  <version>1.2.4</version>
 </dependency>
 ```
 
@@ -491,7 +492,7 @@ System.out.println(status.result + " (" + status.audioDuration + " s)");
 
 | Field | China site | International site | Notes |
 |-------|-----------|--------------------|-------|
-| `SDKAppID` | [TRTC console](https://console.cloud.tencent.com/trtc/app) > Application management | [console.trtc.io](https://console.trtc.io) > application details | TRTC application ID |
+| `SDKAppID` | [TRTC console](https://console.cloud.tencent.com/trtc/app) > Application management | [console.trtc.io](https://console.trtc.io) > application details | TRTC application ID; the only customer dimension on v3 |
 | `SecretKey` | [TRTC console](https://console.cloud.tencent.com/trtc/app) > overview > SDK key | [console.trtc.io](https://console.trtc.io) > application details | Used to derive UserSig; never transmitted |
 
 > The Tencent Cloud `AppID` needed by the v2 client is not required on v3.
@@ -503,13 +504,13 @@ Realtime recognition (`v3.SpeechRecognizer`); setters mirror the v2 client:
 | Method | Description | Default |
 |--------|-------------|---------|
 | `setVoiceFormat(f)` | Audio format | 1 (PCM) |
-| `setNeedVad(v)` | Enable VAD | 1 (on) |
-| `setConvertNumMode(m)` | Number conversion | 1 (smart) |
-| `setHotwordId(id)` / `setHotwordList(list)` | Hotwords | - |
+| `setNeedVad(v)` | Enable VAD (an explicit `0` really turns it off) | 1 (on) |
+| `setConvertNumMode(m)` | Number conversion: `0` off / `1` smart / `3` math (an explicit `0` is sent) | 1 (smart) |
+| `setHotwordId(id)` / `setHotwordList(list)` | Hotwords: table ID (per SdkAppID) / inline `word\|weight,...` | - |
 | `setFilterDirty(m)` / `setFilterModal(m)` / `setFilterPunc(m)` | Filters | 0 (off) |
 | `setFilterEmptyResult(m)` | Deliver empty results | 1 (skip) |
-| `setWordInfo(m)` | Word/character timings | 0 (off) |
-| `setWordWithSpace(m)` | Space-separated English words | 0 (off) |
+| `setWordInfo(m)` | Word/character timings: `0` off / `1` on / `2` with punctuation / `100` caption | 0 (off) |
+| `setWordWithSpace(m)` | Space-separated English word output | 0 (off) |
 | `setVadSilenceTime(ms)` | VAD silence threshold (240-2000) | 800ms |
 | `setVadLevel(level)` | VAD profile: 0 high recall / 1 far-field | 1 |
 | `setNoiseThreshold(v)` | VAD noise tuning (0.0-4.0), overrides the profile | unset |
@@ -517,11 +518,13 @@ Realtime recognition (`v3.SpeechRecognizer`); setters mirror the v2 client:
 | `setInputSampleRate(r)` | PCM input rate, only 8000 | - |
 | `setSpeakerDiarization(m)` | Diarization: 0 off / 1 cluster / 3 voiceprint | 0 (off) |
 | `setSpeakerNumber(n)` | Speaker count hint | 0 (auto) |
-| `setSpeakerRoles(roles)` | Temporary voiceprints (mode 3) | - |
-| `setVoiceprintIds(ids)` | Enrolled voiceprint IDs (mode 3) | - |
-| `setLanguage(lang)` | Language hint | auto |
-| `setVoiceId(id)` | Custom voice_id | auto UUID |
-| `setContext(ctx)` | Recognition context | - |
+| `setSpeakerRoles(roles)` | Temporary voiceprints (mode 3 only) | - |
+| `setVoiceprintIds(ids)` | Enrolled voiceprint IDs (mode 3 only) | - |
+| `setLanguage(lang)` | Language hint | auto detect |
+| `setVoiceId(id)` | Custom voice_id (UserSig is bound to it) | auto UUID |
+| `setContext(ctx)` | Recognition context (`text` / `terms` / `general`) | - |
+
+> v3 realtime does not carry the v2 `customization_id` / `replace_text_id`.
 
 ## Engine models
 
@@ -570,7 +573,8 @@ trtc-asr-sdk-java/
 
 **v3 or v2?** For new integrations use v3 (`com.tencent.trtcasr.v3`): only SdkAppID + SecretKey, a cleaner protocol, and `start()` throws auth/parameter errors. Existing v2 users can stay as they are — see [docs/v2_protocol.md](./docs/v2_protocol.md).
 
-**How do I read error codes?** SDK-local codes are 10xx; server codes are 4xxx/5xxx. `ASRException.getCode()` ranges do not overlap.
+**How do I read error codes?** v3 uses numeric codes throughout: `4001` invalid parameter, `4002` authentication failed, `4006` concurrency limit, `4008` timeout, `5000` server error.
+The exception you get is `ASRException`; its `getCode()` is the server code (SDK-local errors use the 10xx range, e.g. `1001` invalid parameter, `1002` connection failed). Note that an HTTP authentication failure is also HTTP 200 — always trust the `code` in the body (the SDK already does).
 
 **Can I query a v1 task ID through v3?** No. The v1 `RecTaskId` and the v3 `transcription_id` are separate task spaces.
 

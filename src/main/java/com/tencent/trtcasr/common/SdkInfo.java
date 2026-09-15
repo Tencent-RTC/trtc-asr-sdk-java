@@ -27,7 +27,7 @@ public final class SdkInfo {
      * absent — a runtime lookup would then report nothing at all, which is
      * worse than a constant that a release checklist keeps current.
      */
-    public static final String SDK_VERSION = "1.2.3";
+    public static final String SDK_VERSION = "1.2.4";
 
     /** Identifies the SDK implementation language. */
     public static final String SDK_LANGUAGE = "java";
