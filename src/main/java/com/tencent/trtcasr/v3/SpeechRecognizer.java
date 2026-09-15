@@ -317,7 +317,7 @@ public class SpeechRecognizer {
         // Begin pulling downlink frames after the ack.
         WebSocket ws = webSocket;
         if (ws != null) {
-            ws.request(1);
+            ws.request(FRAME_CREDIT);
         }
     }
 
@@ -526,7 +526,7 @@ public class SpeechRecognizer {
         }
 
         // Pull the first frame (the ack) and wait for it.
-        ws.request(1);
+        ws.request(FRAME_CREDIT);
         try {
             if (!ackLatch.await(ACK_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
                 close();
@@ -743,6 +743,17 @@ public class SpeechRecognizer {
         }
     }
 
+    /**
+     * Server frames are pulled without a manual credit window. A close frame
+     * is delivered by the JDK without needing a request, so a one-frame
+     * credit window lets a close overtake a terminal text frame that has
+     * already arrived: onClose then runs first, shuts the callback executor
+     * down, and the terminal frame is never delivered — the caller sees
+     * neither onRecognitionComplete nor onFail. Requesting an unbounded
+     * number of frames keeps delivery in arrival order.
+     */
+    private static final long FRAME_CREDIT = Long.MAX_VALUE;
+
     private static Duration clampTimeout(Duration v, Duration min, Duration max, Duration dflt) {
         if (v == null || v.isZero() || v.isNegative()) {
             return dflt;
@@ -764,7 +775,7 @@ public class SpeechRecognizer {
             synchronized (textBuffer) {
                 textBuffer.append(data);
                 if (!last) {
-                    ws.request(1);
+                    ws.request(FRAME_CREDIT);
                     return null;
                 }
                 text = textBuffer.toString();
@@ -786,19 +797,19 @@ public class SpeechRecognizer {
         public CompletionStage<?> onBinary(WebSocket ws, ByteBuffer data, boolean last) {
             dispatchOnCallbackThread(() -> safeOnFail(null, new ASRException(
                     ErrorCodes.READ_FAILED, "unmarshal response failed: unexpected binary frame")));
-            ws.request(1);
+            ws.request(FRAME_CREDIT);
             return null;
         }
 
         @Override
         public CompletionStage<?> onPing(WebSocket ws, ByteBuffer message) {
-            ws.request(1);
+            ws.request(FRAME_CREDIT);
             return null;
         }
 
         @Override
         public CompletionStage<?> onPong(WebSocket ws, ByteBuffer message) {
-            ws.request(1);
+            ws.request(FRAME_CREDIT);
             return null;
         }
 
@@ -813,6 +824,16 @@ public class SpeechRecognizer {
                     return;
                 }
                 if (state.get() >= STATE_STOPPING) {
+                    // We asked to stop, so a close is expected — but only
+                    // after the terminal response was delivered. Without this
+                    // check a close that overtakes the terminal frame ends the
+                    // session with neither onRecognitionComplete nor onFail,
+                    // making a truncated session look like a silent success.
+                    if (!terminalReceived.get()) {
+                        safeOnFail(null, new ASRException(ErrorCodes.READ_FAILED,
+                                "connection closed by server before the final response: "
+                                        + statusCode + " " + reason));
+                    }
                     signalDone();
                     return;
                 }
@@ -834,6 +855,11 @@ public class SpeechRecognizer {
                     return;
                 }
                 if (state.get() >= STATE_STOPPING) {
+                    if (!terminalReceived.get()) {
+                        safeOnFail(null, new ASRException(ErrorCodes.READ_FAILED,
+                                "read message failed before the final response: "
+                                        + error.getMessage(), error));
+                    }
                     signalDone();
                     return;
                 }
@@ -853,7 +879,7 @@ public class SpeechRecognizer {
             }
             WebSocket ws = webSocket;
             if (ws != null && doneLatch.getCount() != 0) {
-                ws.request(1);
+                ws.request(FRAME_CREDIT);
             }
         }
 
