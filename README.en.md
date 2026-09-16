@@ -412,7 +412,7 @@ Both are tri-state: **only an explicit setter call is sent on the wire**, so an 
 <dependency>
   <groupId>com.tencent</groupId>
   <artifactId>trtc-asr-sdk</artifactId>
-  <version>1.2.4</version>
+  <version>1.2.5</version>
 </dependency>
 ```
 
