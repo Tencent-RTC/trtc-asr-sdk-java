@@ -53,7 +53,7 @@ public class V3OfflineTest {
             assertEquals("1400000000", auth.path("sdkappid").asText());
             assertFalse(auth.path("usersig").asText("").isEmpty());
             assertFalse(auth.path("request_id").asText("").isEmpty());
-            assertFalse(auth.has("business"));
+            assertEquals(3, auth.size(), "auth must only carry sdkappid, usersig, request_id");
 
             JsonNode params = body.path("params");
             assertEquals("16k_zh_en", params.path("engine_model_type").asText());

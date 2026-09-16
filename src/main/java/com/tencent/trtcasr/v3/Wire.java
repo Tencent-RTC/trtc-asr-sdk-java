@@ -72,12 +72,7 @@ public final class Wire {
         return new Credential(0, sdkAppId, secretKey);
     }
 
-    /**
-     * Builds the v3 auth block (sdkappid / usersig / request_id). The
-     * protocol's internal "business" field (gray/routing dimension managed
-     * by the service side, default "OUTER") is not part of the public SDK
-     * surface and is never sent by this client.
-     */
+    /** Builds the v3 auth block (sdkappid / usersig / request_id). */
     public static Map<String, String> buildAuthBlock(Credential credential,
             String requestId) throws ASRException {
         String userSig = credential.getUserSig();

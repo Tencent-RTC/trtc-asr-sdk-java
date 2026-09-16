@@ -20,9 +20,6 @@ import com.tencent.trtcasr.v3.Wire;
  * {@code TRTC_ASR_SDK_APP_ID}, {@code TRTC_ASR_SECRET_KEY}
  * (v3 does not need the Tencent Cloud APPID.)
  *
- * <p>Prerequisite: the server has enabled the EnableV3Route gray switch for
- * your SDKAppID, otherwise start() fails with 4001.
- *
  * <p>Usage: {@code java ... V3RealtimeAsrExample <audio.pcm> [engine]}
  */
 public class V3RealtimeAsrExample {

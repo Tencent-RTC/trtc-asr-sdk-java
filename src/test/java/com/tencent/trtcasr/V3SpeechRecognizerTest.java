@@ -157,8 +157,7 @@ public class V3SpeechRecognizerTest {
             JsonNode auth = frame.path("auth");
             assertEquals("1400000000", auth.path("sdkappid").asText());
             assertFalse(auth.path("usersig").asText("").isEmpty());
-            // business is a server-side internal gray dimension; never sent.
-            assertFalse(auth.has("business"), "auth must not carry business");
+            assertEquals(2, auth.size(), "auth must only carry sdkappid and usersig");
 
             JsonNode params = frame.path("params");
             assertEquals("voice-1", params.path("voice_id").asText());
@@ -215,7 +214,7 @@ public class V3SpeechRecognizerTest {
     }
 
     @Test
-    public void startGrayDisabledErrorIsSynchronous() throws Exception {
+    public void start4001ErrorIsSynchronous() throws Exception {
         try (MiniWebSocketServer server = new MiniWebSocketServer(ws -> {
             ws.read();
             ws.sendText("{\"code\":4001,\"message\":\"v3 interface not enabled\",\"voice_id\":\"v1\"}");
