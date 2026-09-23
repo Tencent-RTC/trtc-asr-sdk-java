@@ -28,12 +28,28 @@ public class SpeechRecognitionResponse {
     @JsonProperty("result")
     private RecognitionResult result = new RecognitionResult();
 
+    /**
+     * Speaker-context result of the first response, present only when the
+     * session enabled the speaker context (v3
+     * {@code setEnableSpeakerContext}); it also reaches
+     * {@code onRecognitionStart}.
+     */
+    @JsonProperty("speaker_continue")
+    private SpeakerContinue speakerContinue;
+
     /** Package-private factory for the session-start callback response. */
     public static SpeechRecognitionResponse sessionStart(String voiceId) {
+        return sessionStart(voiceId, null);
+    }
+
+    /** Package-private factory for the session-start callback response. */
+    public static SpeechRecognitionResponse sessionStart(String voiceId,
+            SpeakerContinue speakerContinue) {
         SpeechRecognitionResponse resp = new SpeechRecognitionResponse();
         resp.code = 0;
         resp.message = "success";
         resp.voiceId = voiceId;
+        resp.speakerContinue = speakerContinue;
         return resp;
     }
 
@@ -59,6 +75,12 @@ public class SpeechRecognitionResponse {
 
     public RecognitionResult getResult() {
         return result;
+    }
+
+    /** Speaker-context handshake result; {@code null} unless the session
+     * enabled the speaker context (v3 only). */
+    public SpeakerContinue getSpeakerContinue() {
+        return speakerContinue;
     }
 
     /** Recognition result details carried by a realtime response. */

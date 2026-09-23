@@ -51,6 +51,28 @@ public final class Wire {
     /** Speaker diarization modes. */
     public static final int SPEAKER_DIARIZATION_VOICEPRINT = 3;
 
+    /**
+     * Speaker-context ("断点续传") modes for enable_speaker_context. They turn
+     * speaker diarization into a resumable session: the server stores the
+     * stable speaker anchors and hands back an opaque speaker_context_id,
+     * which a later connection passes back to keep the same speakers on the
+     * same ids. Both modes require speaker diarization.
+     */
+    public static final int SPEAKER_CONTEXT_OFF = 0;
+    /** Sync: with a stored id the first response waits for the snapshot. */
+    public static final int SPEAKER_CONTEXT_SYNC = 1;
+    /** Async: the first response answers immediately (id only, no status). */
+    public static final int SPEAKER_CONTEXT_ASYNC = 2;
+
+    /** continue_status values of SpeakerContinue.getContinueStatus(). */
+    public static final String CONTINUE_STATUS_FRESH = "fresh";
+    /** continue_status values of SpeakerContinue.getContinueStatus(). */
+    public static final String CONTINUE_STATUS_RESUMED = "resumed";
+    /** continue_status values of SpeakerContinue.getContinueStatus(). */
+    public static final String CONTINUE_STATUS_DEGRADED = "degraded";
+    /** continue_status values of SpeakerContinue.getContinueStatus(). */
+    public static final String CONTINUE_STATUS_DISABLED = "disabled";
+
     /** Wire size limit of the online start frame, mirroring the server. */
     public static final int START_FRAME_MAX_BYTES = 64 * 1024;
     /** Wire size limit of one audio frame, mirroring the server. */
@@ -203,6 +225,34 @@ public final class Wire {
                     throw ASRException.invalidParam("VoiceprintIds[%d] is empty", i);
                 }
             }
+        }
+    }
+
+    /**
+     * Checks the speaker-context ("断点续传") options.
+     *
+     * <p>enable_speaker_context accepts 0 (off), 1 (sync) or 2 (async); the
+     * server silently normalizes anything else to off, but a caller that meant
+     * to enable resumption is better served by an immediate error than by a
+     * session that quietly never returns a speaker_context_id.
+     *
+     * <p>The server ignores the speaker-context parameters entirely when
+     * speaker diarization is off, so that combination is a caller mistake as
+     * well (mirroring how roles/voiceprint ids require mode 3).
+     *
+     * <p>speaker_context_id itself is not format-checked on purpose: the
+     * server treats an unknown or expired id as "start a new session", so a
+     * stale value degrades gracefully instead of failing the connection.
+     */
+    public static void validateSpeakerContext(int mode, int diarization) throws ASRException {
+        if (mode != SPEAKER_CONTEXT_OFF && mode != SPEAKER_CONTEXT_SYNC
+                && mode != SPEAKER_CONTEXT_ASYNC) {
+            throw ASRException.invalidParam(
+                    "EnableSpeakerContext must be 0 (off), 1 (sync) or 2 (async), got %d", mode);
+        }
+        if (mode != SPEAKER_CONTEXT_OFF && diarization == SPEAKER_DIARIZATION_OFF) {
+            throw new ASRException(ErrorCodes.INVALID_PARAM,
+                    "EnableSpeakerContext requires SpeakerDiarization=1 or 3");
         }
     }
 

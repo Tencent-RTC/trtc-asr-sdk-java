@@ -35,6 +35,10 @@ import com.tencent.trtcasr.v3.Wire;
 public class V3SpeechRecognizerTest {
     private static final ObjectMapper M = new ObjectMapper();
 
+    /** A 64-hex speaker_context_id, as issued by the server. */
+    private static final String CONTEXT_ID =
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
     private static com.tencent.trtcasr.common.Credential credential() {
         return Wire.newCredential(1400000000, "test-secret");
     }
@@ -60,9 +64,12 @@ public class V3SpeechRecognizerTest {
         int fails;
         String lastEndText = "";
         String lastFailCode = "";
+        final java.util.List<SpeechRecognitionResponse> startResponses =
+                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
         @Override
         public void onRecognitionStart(SpeechRecognitionResponse response) {
+            startResponses.add(response);
         }
 
         @Override
@@ -103,6 +110,11 @@ public class V3SpeechRecognizerTest {
             throws Exception {
         ws.read(); // start frame
         ws.sendText(ack("v1"));
+        serveFinalAfterEnd(ws);
+    }
+
+    /** Waits for the client's end signal, then sends the terminal frame. */
+    private static void serveFinalAfterEnd(MiniWebSocketServer.Session ws) throws Exception {
         MiniWebSocketServer.Frame f;
         while ((f = ws.read()) != null) {
             if (f.isText() && f.text().contains("\"end\"")) {
@@ -138,6 +150,8 @@ public class V3SpeechRecognizerTest {
             r.setSpeakerRoles(Arrays.asList(
                     new SpeakerRole("teacher", "https://example.com/t.wav")));
             r.setVoiceprintIds(Arrays.asList("vp-1"));
+            r.setEnableSpeakerContext(Wire.SPEAKER_CONTEXT_SYNC);
+            r.setSpeakerContextId(CONTEXT_ID);
             Context ctx = new Context();
             ctx.setText("bg");
             ctx.setTerms(Arrays.asList("ASR"));
@@ -171,6 +185,10 @@ public class V3SpeechRecognizerTest {
             assertEquals("深度学习|10", params.path("hotword_list").asText());
             assertEquals(3, params.path("speaker_diarization").asInt());
             assertEquals(M.readTree("[\"vp-1\"]"), params.path("voiceprint_ids"));
+            // Speaker context ("断点续传"): the mode and the id travel in params.
+            assertEquals(Wire.SPEAKER_CONTEXT_SYNC,
+                    params.path("enable_speaker_context").asInt());
+            assertEquals(CONTEXT_ID, params.path("speaker_context_id").asText());
             // speaker_roles elements are snake_case, not the v2 CamelCase wire.
             assertEquals(
                     M.readTree("[{\"role_name\":\"teacher\",\"audio_url\":\"https://example.com/t.wav\"}]"),
@@ -181,6 +199,95 @@ public class V3SpeechRecognizerTest {
                     params.path("context"));
             assertEquals("java", params.path("sdk_info").path("sdk_lang").asText());
             assertNull(server.handlerError());
+        }
+    }
+
+    @Test
+    public void speakerContextIdOmittedWhenModeOff() throws Exception {
+        AtomicReference<String> startFrame = new AtomicReference<>();
+        try (MiniWebSocketServer server = new MiniWebSocketServer(ws -> {
+            MiniWebSocketServer.Frame start = ws.read();
+            assertNotNull(start, "start frame must arrive");
+            startFrame.set(start.text());
+            ws.sendText(ack("v1"));
+            serveFinalAfterEnd(ws);
+        })) {
+            RecordingListener listener = new RecordingListener();
+            SpeechRecognizer r = new SpeechRecognizer(credential(), "16k_zh_en", listener);
+            r.setEndpoint(server.url());
+            r.setSpeakerDiarization(Wire.SPEAKER_DIARIZATION_CLUSTER);
+            r.setEnableSpeakerContext(Wire.SPEAKER_CONTEXT_SYNC);
+            r.setSpeakerContextId(CONTEXT_ID);
+            r.setEnableSpeakerContext(Wire.SPEAKER_CONTEXT_OFF);
+            r.start();
+            r.stop();
+            assertTrue(listener.done.await(3, TimeUnit.SECONDS), "session must complete");
+
+            JsonNode params = M.readTree(startFrame.get()).path("params");
+            assertTrue(params.path("enable_speaker_context").isMissingNode());
+            assertTrue(params.path("speaker_context_id").isMissingNode());
+            assertNull(server.handlerError());
+        }
+    }
+
+    @Test
+    public void speakerContinueHandshake() throws Exception {
+        for (String[] c : new String[][] {
+                // status, enable mode (null = off), expected status, expects id
+                {"{\"continue_status\":\"resumed\",\"speaker_context_id\":\"" + CONTEXT_ID + "\"}",
+                        "1", "resumed", "true"},
+                {"{\"continue_status\":\"fresh\",\"speaker_context_id\":\"" + CONTEXT_ID + "\"}",
+                        "1", "fresh", "true"},
+                // Async mode answers before the snapshot is applied: id only.
+                {"{\"speaker_context_id\":\"" + CONTEXT_ID + "\"}", "2", "", "true"},
+                {"null", null, null, null},
+        }) {
+            String speakerContinueJson = c[0];
+            String mode = c[1];
+            String wantStatus = c[2];
+            boolean expectId = c[3] != null;
+
+            try (MiniWebSocketServer server = new MiniWebSocketServer(ws -> {
+                ws.read(); // start frame
+                ws.sendText("{\"code\":0,\"message\":\"success\",\"voice_id\":\"v1\","
+                        + "\"speaker_continue\":" + speakerContinueJson + "}");
+                serveFinalAfterEnd(ws);
+            })) {
+                RecordingListener listener = new RecordingListener();
+                SpeechRecognizer r = new SpeechRecognizer(credential(), "16k_zh_en", listener);
+                r.setEndpoint(server.url());
+                if (mode != null) {
+                    r.setSpeakerDiarization(Wire.SPEAKER_DIARIZATION_CLUSTER);
+                    r.setEnableSpeakerContext(Integer.parseInt(mode));
+                }
+                r.start();
+
+                // The getter is usable as soon as start() returns.
+                com.tencent.trtcasr.asr.SpeakerContinue sc = r.getSpeakerContinue();
+                if (!expectId) {
+                    assertNull(sc, "context off must yield no handshake result");
+                } else {
+                    assertNotNull(sc);
+                    assertEquals(wantStatus, sc.getContinueStatus());
+                    assertEquals(CONTEXT_ID, sc.getSpeakerContextId());
+                }
+
+                r.write(new byte[1280]);
+                r.stop();
+                assertTrue(listener.done.await(3, TimeUnit.SECONDS), "session must complete");
+
+                // The same block is delivered on onRecognitionStart.
+                assertTrue(listener.startResponses.size() >= 1, "onRecognitionStart must fire");
+                com.tencent.trtcasr.asr.SpeakerContinue delivered =
+                        listener.startResponses.get(0).getSpeakerContinue();
+                if (!expectId) {
+                    assertNull(delivered);
+                } else {
+                    assertNotNull(delivered);
+                    assertEquals(CONTEXT_ID, delivered.getSpeakerContextId());
+                }
+                assertNull(server.handlerError());
+            }
         }
     }
 
@@ -317,7 +424,13 @@ public class V3SpeechRecognizerTest {
                 new Case("filter_empty_result invalid", r -> r.setFilterEmptyResult(2)),
                 new Case("vad_level invalid", r -> r.setVadLevel(2)),
                 new Case("noise_threshold out of range", r -> r.setNoiseThreshold(4.1)),
-                new Case("diarization invalid", r -> r.setSpeakerDiarization(2)));
+                new Case("diarization invalid", r -> r.setSpeakerDiarization(2)),
+                new Case("enable_speaker_context invalid", r -> {
+                    r.setSpeakerDiarization(Wire.SPEAKER_DIARIZATION_CLUSTER);
+                    r.setEnableSpeakerContext(3);
+                }),
+                new Case("enable_speaker_context without diarization",
+                        r -> r.setEnableSpeakerContext(Wire.SPEAKER_CONTEXT_SYNC)));
         for (Case tc : cases) {
             SpeechRecognizer r = new SpeechRecognizer(credential(), "16k_zh_en",
                     new RecordingListener());

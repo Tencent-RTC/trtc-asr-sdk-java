@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tencent.trtcasr.asr.SpeakerContinue;
 import com.tencent.trtcasr.asr.SpeechRecognitionListener;
 import com.tencent.trtcasr.asr.SpeechRecognitionResponse;
 import com.tencent.trtcasr.common.ASRException;
@@ -81,6 +82,13 @@ public class SpeechRecognizer {
     private static final Duration HANDSHAKE_TIMEOUT = Duration.ofSeconds(10);
     /** How long start() waits for the server's start-frame acknowledgement. */
     private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
+    /**
+     * Replaces ACK_TIMEOUT while resuming a speaker context (sync mode + a
+     * stored speaker_context_id): the first response is delayed until the
+     * server has loaded the stored speaker snapshot and restored it in the
+     * diarization session.
+     */
+    private static final Duration SPEAKER_CONTEXT_ACK_TIMEOUT = Duration.ofSeconds(15);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -117,6 +125,13 @@ public class SpeechRecognizer {
     private String voiceId = "";
     private String language = "";
     private Context context;
+
+    // Speaker context ("断点续传"): the requested mode (0/1/2) and the id
+    // issued by an earlier session.
+    private int enableSpeakerContext;
+    private String speakerContextId = "";
+    /** Handshake result of the first response, exposed via getSpeakerContinue(). */
+    private volatile SpeakerContinue speakerContinue;
 
     private volatile Duration writeTimeout = DEFAULT_WRITE_TIMEOUT;
     private volatile Duration stopTimeout = DEFAULT_STOP_TIMEOUT;
@@ -256,6 +271,52 @@ public class SpeechRecognizer {
         this.voiceprintIds = ids == null ? new ArrayList<>() : new ArrayList<>(ids);
     }
 
+    /**
+     * Makes the speaker-diarization session resumable ("说话人分离断点续传")
+     * and selects how the server reports the handshake:
+     *
+     * <ul>
+     *   <li>{@code SPEAKER_CONTEXT_OFF} (0, default): nothing is saved or
+     *       returned, and {@code setSpeakerContextId} is ignored.</li>
+     *   <li>{@code SPEAKER_CONTEXT_SYNC} (1): the first response waits for
+     *       the stored snapshot to be applied and reports the outcome through
+     *       {@code SpeakerContinue.getContinueStatus()}.</li>
+     *   <li>{@code SPEAKER_CONTEXT_ASYNC} (2): the first response answers
+     *       immediately with the speaker_context_id only (no status) — use it
+     *       to keep reconnects fast.</li>
+     * </ul>
+     *
+     * <p>Requires {@code setSpeakerDiarization(1)} or {@code (3)}. See
+     * {@link SpeakerContinue} for the reconnect workflow.
+     */
+    public void setEnableSpeakerContext(int mode) {
+        this.enableSpeakerContext = mode;
+    }
+
+    /**
+     * Passes back the speaker_context_id returned by a previous session
+     * ({@code SpeakerContinue.getSpeakerContextId()}) so this session resumes
+     * the same speaker identities instead of numbering speakers from scratch.
+     *
+     * <p>Only effective together with
+     * {@code setEnableSpeakerContext(1)} or {@code (2)}. The server ignores an
+     * expired or unknown id and starts a new session, so a stale value does
+     * not fail the connection; always overwrite the stored id with the one
+     * returned by the latest first response.
+     */
+    public void setSpeakerContextId(String id) {
+        this.speakerContextId = id == null ? "" : id.trim();
+    }
+
+    /**
+     * Speaker-context result carried by the first response, or {@code null}
+     * when the session did not enable the speaker context. Available once
+     * {@code start()} returns; also delivered to {@code onRecognitionStart}.
+     */
+    public SpeakerContinue getSpeakerContinue() {
+        return speakerContinue;
+    }
+
     /** Sets a custom voice ID. A UUID is generated when left empty. */
     public void setVoiceId(String id) {
         this.voiceId = id;
@@ -305,7 +366,10 @@ public class SpeechRecognizer {
         }
         state.set(STATE_RUNNING);
 
-        SpeechRecognitionResponse startResp = SpeechRecognitionResponse.sessionStart(voiceId);
+        // The ack itself is consumed by connect; re-attach the speaker
+        // context it carried so callback-style callers see the id/status.
+        SpeechRecognitionResponse startResp =
+                SpeechRecognitionResponse.sessionStart(voiceId, speakerContinue);
         dispatchOnCallbackThread(() -> {
             try {
                 listener.onRecognitionStart(startResp);
@@ -333,6 +397,7 @@ public class SpeechRecognizer {
         }
         Wire.validateSpeakerDiarization(speakerDiarization, speakerNumber,
                 speakerRoles, voiceprintIds);
+        Wire.validateSpeakerContext(enableSpeakerContext, speakerDiarization);
         Wire.validateVadTuning(vadLevel, noiseThreshold);
         if (maxSpeakTime != 0
                 && (maxSpeakTime < Wire.MIN_MAX_SPEAK_TIME || maxSpeakTime > Wire.MAX_MAX_SPEAK_TIME)) {
@@ -437,6 +502,14 @@ public class SpeechRecognizer {
                 params.put("voiceprint_ids", voiceprintIds);
             }
         }
+        // Speaker context ("断点续传") is only sent when the caller opted in;
+        // the mode/diarization combination is validated locally.
+        if (enableSpeakerContext != 0) {
+            params.put("enable_speaker_context", enableSpeakerContext);
+            if (!speakerContextId.isEmpty()) {
+                params.put("speaker_context_id", speakerContextId);
+            }
+        }
         if (context != null) {
             params.put("context", context);
         }
@@ -525,10 +598,12 @@ public class SpeechRecognizer {
                     "send start frame failed: " + e.getMessage(), e);
         }
 
-        // Pull the first frame (the ack) and wait for it.
+        // Pull the first frame (the ack) and wait for it. Resuming a speaker
+        // context in sync mode makes the server apply the stored snapshot
+        // before answering, so that path gets a longer budget.
         ws.request(FRAME_CREDIT);
         try {
-            if (!ackLatch.await(ACK_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+            if (!ackLatch.await(ackWait().toMillis(), TimeUnit.MILLISECONDS)) {
                 close();
                 throw new ASRException(ErrorCodes.READ_FAILED,
                         "read start ack failed: ack timeout");
@@ -553,8 +628,30 @@ public class SpeechRecognizer {
             close();
             throw new ASRException((int) code, node.path("message").asText(""));
         }
+        // speaker_continue is present only when the session enabled the
+        // speaker context; it carries the id to persist for a later resume.
+        JsonNode speakerContinueNode = node.path("speaker_continue");
+        if (speakerContinueNode.isObject()) {
+            try {
+                speakerContinue = MAPPER.treeToValue(speakerContinueNode, SpeakerContinue.class);
+            } catch (Exception e) {
+                speakerContinue = null;
+            }
+        }
         // The ack frame never carries a result per the protocol; a defensive
         // ack-with-result is consumed here.
+    }
+
+    /**
+     * How long {@code connect()} waits for the first response. Resuming a
+     * speaker context in sync mode makes the server apply the stored snapshot
+     * before answering; every other case answers immediately.
+     */
+    private Duration ackWait() {
+        if (enableSpeakerContext == Wire.SPEAKER_CONTEXT_SYNC && !speakerContextId.isEmpty()) {
+            return SPEAKER_CONTEXT_ACK_TIMEOUT;
+        }
+        return ACK_TIMEOUT;
     }
 
     /** Sends one audio frame (binary, ≤256KB) to the ASR service. */

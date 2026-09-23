@@ -103,6 +103,10 @@ public class SpeechRecognizer {
     private int inputSampleRate;
     private int speakerDiarization;
     private int speakerNumber;
+    private int enableSpeakerContext;
+    private String speakerContextId = "";
+    /** 首响应携带的断点续传握手结果（v2 的 onRecognitionStart 早于首响应）。 */
+    private volatile SpeakerContinue speakerContinue;
     private List<SpeakerRole> speakerRoles = new ArrayList<>();
     private List<String> voiceprintIds = new ArrayList<>();
     private String voiceId = "";
@@ -267,6 +271,24 @@ public class SpeechRecognizer {
         this.speakerNumber = n;
     }
 
+    /** 说话人分离断点续传：1=同步（首响应回报恢复状态）2=异步（只回 id）。
+     *  需与 setSpeakerDiarization(1/3) 同开。注意 v2 的 onRecognitionStart 早于
+     *  服务端首响应，握手结果只能经 getSpeakerContinue() 读取。
+     */
+    public void setEnableSpeakerContext(int mode) {
+        this.enableSpeakerContext = mode;
+    }
+
+    /** 传回上次会话的 speaker_context_id；过期/非法 ID 服务端按新会话处理。 */
+    public void setSpeakerContextId(String id) {
+        this.speakerContextId = id == null ? "" : id.trim();
+    }
+
+    /** 首响应携带的断点续传握手结果；未开启时为 {@code null}。 */
+    public SpeakerContinue getSpeakerContinue() {
+        return speakerContinue;
+    }
+
     /** Registers temporary voiceprints; only used with voiceprint mode. */
     public void setSpeakerRoles(List<SpeakerRole> roles) {
         this.speakerRoles = roles == null ? new ArrayList<>() : new ArrayList<>(roles);
@@ -349,6 +371,16 @@ public class SpeechRecognizer {
     private void validateOptions() throws ASRException {
         ParamsValidator.validateSpeakerDiarization(speakerDiarization, speakerNumber,
                 speakerRoles, voiceprintIds);
+        if (enableSpeakerContext != 0 && enableSpeakerContext != 1
+                && enableSpeakerContext != 2) {
+            throw new ASRException(ErrorCodes.INVALID_PARAM,
+                    "EnableSpeakerContext must be 0 (off), 1 (sync) or 2 (async), got "
+                            + enableSpeakerContext);
+        }
+        if (enableSpeakerContext != 0 && speakerDiarization == 0) {
+            throw new ASRException(ErrorCodes.INVALID_PARAM,
+                    "EnableSpeakerContext requires setSpeakerDiarization(1) or (3)");
+        }
         ParamsValidator.validateVadTuning(vadLevel, noiseThreshold);
         if (filterEmptyResult != null) {
             ParamsValidator.validateEnumOption("FilterEmptyResult", filterEmptyResult, 0, 1);
@@ -397,6 +429,8 @@ public class SpeechRecognizer {
         p.setMaxSpeakTime(maxSpeakTime);
         p.setInputSampleRate(inputSampleRate);
         p.setSpeakerDiarization(speakerDiarization);
+        p.setEnableSpeakerContext(enableSpeakerContext);
+        p.setSpeakerContextId(speakerContextId);
         p.setSpeakerNumber(speakerNumber);
         p.setSpeakerRoles(speakerRoles);
         p.setVoiceprintIds(voiceprintIds);
@@ -813,6 +847,12 @@ public class SpeechRecognizer {
                 safeOnFail(null, new ASRException(ErrorCodes.READ_FAILED,
                         "unmarshal response failed: " + e.getMessage()));
                 return;
+            }
+
+            if (resp.getSpeakerContinue() != null) {
+                // 首响应携带断点续传握手结果；v2 的 onRecognitionStart 在建连后
+                // 本地合成（早于本帧），只能经 getSpeakerContinue() 读取。
+                speakerContinue = resp.getSpeakerContinue();
             }
 
             if (resp.getCode() != 0) {

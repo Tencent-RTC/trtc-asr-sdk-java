@@ -81,6 +81,16 @@ public class SignatureParams {
     /** Pre-registered voiceprint IDs; only sent when mode is 3. */
     private List<String> voiceprintIds = new ArrayList<>();
 
+    /** 说话人分离断点续传：0=off（默认），1=同步回报恢复状态，2=异步只回 id。
+     *  需与 speakerDiarization 1/3 同开。
+     */
+    private int enableSpeakerContext;
+
+    /** 上次会话签发的上下文 ID；仅与 enableSpeakerContext 一起下发。
+     *  过期/非法 ID 服务端按新会话处理。
+     */
+    private String speakerContextId = "";
+
     public SignatureParams(long appId, String engineModelType, String voiceId) {
         this.appId = appId;
         this.timestamp = System.currentTimeMillis() / 1000;
@@ -180,6 +190,12 @@ public class SignatureParams {
             if (speakerNumber != 0) {
                 m.put("speaker_number", Integer.toString(speakerNumber));
             }
+        if (enableSpeakerContext != 0) {
+            m.put("enable_speaker_context", Integer.toString(enableSpeakerContext));
+            if (!speakerContextId.isEmpty()) {
+                m.put("speaker_context_id", speakerContextId);
+            }
+        }
         }
         // speaker_roles / voiceprintids only apply to voiceprint mode.
         if (speakerDiarization == SPEAKER_DIARIZATION_VOICEPRINT) {
@@ -459,5 +475,13 @@ public class SignatureParams {
 
     public void setVoiceprintIds(List<String> voiceprintIds) {
         this.voiceprintIds = voiceprintIds == null ? new ArrayList<>() : new ArrayList<>(voiceprintIds);
+    }
+
+    public void setEnableSpeakerContext(int enableSpeakerContext) {
+        this.enableSpeakerContext = enableSpeakerContext;
+    }
+
+    public void setSpeakerContextId(String speakerContextId) {
+        this.speakerContextId = speakerContextId == null ? "" : speakerContextId.trim();
     }
 }
