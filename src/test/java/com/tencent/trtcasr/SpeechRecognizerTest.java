@@ -102,6 +102,12 @@ class SpeechRecognizerTest {
                     if (f.isText() && f.text().equals("{\"type\":\"end\"}")) {
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -227,6 +233,8 @@ class SpeechRecognizerTest {
                         s.sendText("{\"code\":0,\"message\":\"success\",\"voice_id\":\"v1\",\"message_id\":\"m3\","
                                 + "\"final\":1,\"result\":{\"slice_type\":2,\"index\":0,"
                                 + "\"voice_text_str\":\"今天天气不错。\"}}");
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -240,7 +248,8 @@ class SpeechRecognizerTest {
             r.write(new byte[]{0, 1, 2, 3});
             r.stop();
 
-            assertTrue(listener.completeLatch.await(2, TimeUnit.SECONDS), "should complete");
+            assertTrue(listener.completeLatch.await(2, TimeUnit.SECONDS),
+                    "should complete, events=" + listener.events + " err=" + listener.lastError);
             assertEquals(1, listener.count("start:"));
             // The handshake ack must NOT be dispatched as sentence begin.
             assertEquals(1, listener.count("begin:"));
@@ -272,6 +281,12 @@ class SpeechRecognizerTest {
                         gotEnd.set(true);
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -365,6 +380,12 @@ class SpeechRecognizerTest {
                     if (f.isText() && f.text().equals("{\"type\":\"end\"}")) {
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -417,6 +438,12 @@ class SpeechRecognizerTest {
                     if (f.isText() && f.text().equals("{\"type\":\"end\"}")) {
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -532,6 +559,12 @@ class SpeechRecognizerTest {
                     if (f.isText() && f.text().equals("{\"type\":\"end\"}")) {
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -600,6 +633,12 @@ class SpeechRecognizerTest {
                     if (f.isText() && f.text().equals("{\"type\":\"end\"}")) {
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
@@ -709,6 +748,12 @@ class SpeechRecognizerTest {
                         gotEnd.set(true);
                         s.sendText("{\"code\":0,\"message\":\"ok\",\"voice_id\":\"v1\",\"final\":1,"
                                 + "\"result\":{\"slice_type\":2}}");
+                        // Keep the socket up until the client disconnects.
+                        // Returning here closes TCP in the same instant as the
+                        // final frame; a fast runner reports the close before
+                        // onText, and the session ends with no complete.
+                        while (s.read() != null) {
+                        }
                         return;
                     }
                 }
