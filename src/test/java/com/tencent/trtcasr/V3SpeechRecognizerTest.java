@@ -22,7 +22,6 @@ import com.tencent.trtcasr.asr.SpeechRecognitionResponse;
 import com.tencent.trtcasr.common.ASRException;
 import com.tencent.trtcasr.common.ErrorCodes;
 import com.tencent.trtcasr.v3.AudioURLItem;
-import com.tencent.trtcasr.v3.Context;
 import com.tencent.trtcasr.v3.CreateTranscriptionRequest;
 import com.tencent.trtcasr.v3.FileRecognizer;
 import com.tencent.trtcasr.v3.SentenceRecognizer;
@@ -152,11 +151,6 @@ public class V3SpeechRecognizerTest {
             r.setVoiceprintIds(Arrays.asList("vp-1"));
             r.setEnableSpeakerContext(Wire.SPEAKER_CONTEXT_SYNC);
             r.setSpeakerContextId(CONTEXT_ID);
-            Context ctx = new Context();
-            ctx.setText("bg");
-            ctx.setTerms(Arrays.asList("ASR"));
-            ctx.setGeneral(Arrays.asList(new Context.KV("domain", "Meeting")));
-            r.setContext(ctx);
             r.start();
             r.write(new byte[1280]);
             r.stop();
@@ -193,10 +187,7 @@ public class V3SpeechRecognizerTest {
             assertEquals(
                     M.readTree("[{\"role_name\":\"teacher\",\"audio_url\":\"https://example.com/t.wav\"}]"),
                     params.path("speaker_roles"));
-            assertEquals(
-                    M.readTree("{\"text\":\"bg\",\"terms\":[\"ASR\"],"
-                            + "\"general\":[{\"key\":\"domain\",\"value\":\"Meeting\"}]}"),
-                    params.path("context"));
+            assertTrue(params.path("context").isMissingNode());
             assertEquals("java", params.path("sdk_info").path("sdk_lang").asText());
             assertNull(server.handlerError());
         }

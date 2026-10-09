@@ -124,7 +124,6 @@ public class SpeechRecognizer {
     private List<String> voiceprintIds = new ArrayList<>();
     private String voiceId = "";
     private String language = "";
-    private Context context;
 
     // Speaker context ("断点续传"): the requested mode (0/1/2) and the id
     // issued by an earlier session.
@@ -327,11 +326,6 @@ public class SpeechRecognizer {
         this.language = lang == null ? "" : lang;
     }
 
-    /** Sets the recognition context (background text, terms, domain KVs). */
-    public void setContext(Context context) {
-        this.context = context;
-    }
-
     /** Sets the write timeout, clamped to [50ms, 30s]. */
     public void setWriteTimeout(Duration timeout) {
         this.writeTimeout = clampTimeout(timeout, MIN_WRITE_TIMEOUT, MAX_WRITE_TIMEOUT,
@@ -509,9 +503,6 @@ public class SpeechRecognizer {
             if (!speakerContextId.isEmpty()) {
                 params.put("speaker_context_id", speakerContextId);
             }
-        }
-        if (context != null) {
-            params.put("context", context);
         }
 
         Map<String, Object> auth = new LinkedHashMap<>();

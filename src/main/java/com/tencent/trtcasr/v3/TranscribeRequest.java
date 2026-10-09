@@ -38,8 +38,6 @@ public class TranscribeRequest {
     public int speakerDiarization;
     public int speakerNumber;
 
-    public Context context;
-
     /** Serializes to the snake_case params block (omitting zero values). */
     public Map<String, Object> toWire() {
         Map<String, Object> d = new LinkedHashMap<>();
@@ -93,9 +91,6 @@ public class TranscribeRequest {
             if (speakerNumber != 0) {
                 d.put("speaker_number", speakerNumber);
             }
-        }
-        if (context != null) {
-            d.put("context", context);
         }
         return d;
     }

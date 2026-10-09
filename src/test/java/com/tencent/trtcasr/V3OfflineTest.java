@@ -19,7 +19,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tencent.trtcasr.common.ASRException;
 import com.tencent.trtcasr.common.ErrorCodes;
 import com.tencent.trtcasr.v3.AudioURLItem;
-import com.tencent.trtcasr.v3.Context;
 import com.tencent.trtcasr.v3.CreateTranscriptionRequest;
 import com.tencent.trtcasr.v3.FileRecognizer;
 import com.tencent.trtcasr.v3.SentenceRecognizer;
@@ -84,10 +83,6 @@ public class V3OfflineTest {
             req.needvad = 0;
             req.language = "zh";
             req.wordInfo = 1;
-            Context ctx = new Context();
-            ctx.setText("bg");
-            ctx.setTerms(Arrays.asList("ASR"));
-            req.context = ctx;
             com.tencent.trtcasr.v3.TranscribeResponse resp = r.recognize(req);
 
             assertEquals(0, resp.code);
