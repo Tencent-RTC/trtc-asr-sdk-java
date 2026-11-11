@@ -7,6 +7,11 @@
 
 ## [未发布]
 
+### 文档
+
+- 安装说明改为通过 JitPack 引用 GitHub tag（`com.github.Tencent-RTC:trtc-asr-sdk-java:v2.0.0`）；包尚未发布到 Maven Central，原坐标与版本号 `1.2.5` 均不可用。运行要求更正为 Java 17+（与 pom 编译目标一致）。
+- 参数表移除暂未对外开放的请求字段（`customization_id`、`keyword_lib_id_list`、`replace_text_id`、`sentence_max_length`、`extra`）。
+
 ## [2.0.0] - 2026-10-09
 
 ### 变更

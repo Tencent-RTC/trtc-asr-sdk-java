@@ -285,13 +285,7 @@ HTTP 接口的鉴权信息携带在请求 Header 中（与流式不同，不走 
 
 要求 **JDK 17+**（使用内置的 `java.net.http.HttpClient` / `WebSocket`，无需第三方 WebSocket 库；JSON 用 Jackson）。
 
-```xml
-<dependency>
-    <groupId>com.tencent</groupId>
-    <artifactId>trtc-asr-sdk</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
+通过 JitPack 引用 GitHub tag，写法见 [README 安装](../README.md#安装)。
 
 本地构建安装：
 

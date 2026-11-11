@@ -208,7 +208,6 @@ sequenceDiagram
 | `filter_punc` | int | 否 | 标点过滤：`0` 不过滤 / `1` 过滤 |
 | `convert_num_mode` | int | 否 | 数字转换：`0` 不转 / `1` 智能 / `3` 数学 |
 | `hotword_id` | string | 否 | 热词表 ID |
-| `customization_id` | string | 否 | 自学习模型 ID |
 | `hotword_list` | string | 否 | 临时热词列表 |
 | `input_sample_rate` | int | 否 | PCM 输入采样率（仅 8000，配 16k 引擎升采样） |
 | `needvad` | int | 否 | 三态：不传走默认，`0` 关 / `1` 开 |
@@ -267,14 +266,9 @@ sequenceDiagram
 | `voiceprint_ids` | array | 否 | 已注册声纹 ID（仅模式 3） |
 | `speaker_roles` | array | 否 | 临时声纹 `[{"audio_url","role_name"}]`（仅模式 3） |
 | `hotword_id` | string | 否 | 热词表 ID |
-| `customization_id` | string | 否 | 自学习模型 ID |
 | `hotword_list` | string | 否 | 临时热词列表 |
-| `keyword_lib_id_list` | array | 否 | 关键词库 ID 列表 |
-| `replace_text_id` | string | 否 | 替换词表 ID |
 | `convert_num_mode` | int | 否 | 数字转换 |
 | `filter_dirty` / `filter_punc` / `filter_modal` | int | 否 | 过滤类 |
-| `sentence_max_length` | int | 否 | 单句最大长度 |
-| `extra` | string | 否 | 引擎扩展串 |
 | `vad_silence_ms` | int | 否 | 静音断句阈值（ms） |
 | `vad_level` | int | 否 | VAD 场景档：`0` 高召回 / `1` 远场过滤 |
 | `noise_threshold` | float | 否 | 噪声阈值 `0`~`4`（`0` 是合法取值，用 `null` 区分未设置） |
@@ -457,17 +451,26 @@ recognizer.start(); // 首响应 continue_status=resumed 表示说话人锚点�
 
 ## 安装
 
-`pom.xml`：
+暂未发布到 Maven Central，请通过 [JitPack](https://jitpack.io/#Tencent-RTC/trtc-asr-sdk-java) 按 GitHub tag 引用。`pom.xml`：
 
 ```xml
+<repositories>
+  <repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+  </repository>
+</repositories>
+
 <dependency>
-  <groupId>com.tencent</groupId>
-  <artifactId>trtc-asr-sdk</artifactId>
-  <version>1.2.5</version>
+  <groupId>com.github.Tencent-RTC</groupId>
+  <artifactId>trtc-asr-sdk-java</artifactId>
+  <version>v2.0.0</version>
 </dependency>
 ```
 
-**要求**：Java 11+（`java.net.http` WebSocket 客户端）
+Gradle：`repositories { maven { url 'https://jitpack.io' } }`，依赖写 `implementation 'com.github.Tencent-RTC:trtc-asr-sdk-java:v2.0.0'`。
+
+**要求**：Java 17+
 
 ## 快速开始
 
